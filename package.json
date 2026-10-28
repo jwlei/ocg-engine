@@ -1,0 +1,13 @@
+{
+  "name": "ocg-engine",
+  "private": true,
+  "description": "Boilerplate for turn-based online card games in the browser, backed by Firebase Realtime Database.",
+  "scripts": {
+    "test": "node --test",
+    "stamp": "node scripts/stamp-revs.cjs",
+    "serve": "python -m http.server 8000"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

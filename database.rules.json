@@ -1,0 +1,84 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null",
+        ".write": "auth != null && ((!data.exists() && newData.child('hostUid').val() == auth.uid && newData.child('members').child(auth.uid).exists()) || data.child('members').child(auth.uid).exists())",
+        ".validate": "$roomId.matches(/^[1-9][0-9]{5}$/) && newData.hasChildren(['game', 'hostUid', 'status', 'createdAt', 'updatedAt'])",
+        "game": { ".validate": "newData.isString() && newData.val().matches(/^[a-z][a-z0-9-]{0,39}$/)" },
+        "hostUid": { ".validate": "newData.isString() && newData.parent().child('members').child(newData.val()).exists()" },
+        "status": { ".validate": "newData.val() == 'lobby' || newData.val() == 'playing' || newData.val() == 'finished'" },
+        "isPublic": { ".validate": "newData.isBoolean()" },
+        "createdAt": { ".validate": "newData.isNumber() && (!data.exists() || newData.val() == data.val())" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "version": { ".validate": "newData.isNumber()" },
+        "state": { ".validate": "newData.isString() && newData.val().length <= 200000" },
+        "members": {
+          "$uid": {
+            ".write": "auth != null && auth.uid == $uid && (data.exists() || root.child('rooms').child($roomId).child('status').val() == 'lobby')",
+            ".validate": "newData.hasChildren(['name', 'playerKey', 'joinedAt'])",
+            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24" },
+            "playerKey": { ".validate": "newData.isString() && newData.val().length <= 64" },
+            "joinedAt": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "bots": {
+          "$botId": {
+            ".validate": "$botId.matches(/^bot-[a-z0-9]{1,32}$/) && newData.hasChildren(['name', 'addedAt'])",
+            "name": { ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 24" },
+            "addedAt": { ".validate": "newData.isNumber()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "seats": {
+          "$seat": {
+            ".validate": "newData.hasChildren(['id', 'name', 'bot'])",
+            "id": { ".validate": "newData.isString()" },
+            "name": { ".validate": "newData.isString() && newData.val().length <= 24" },
+            "bot": { ".validate": "newData.isBoolean()" },
+            "left": { ".validate": "newData.isBoolean()" },
+            "$other": { ".validate": false }
+          }
+        },
+        "results": {
+          "$index": {
+            "seat": { ".validate": "newData.isNumber()" },
+            "place": { ".validate": "newData.isNumber()" }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    },
+
+    "presence": {
+      "$roomId": {
+        ".read": "auth != null",
+        "$uid": {
+          ".write": "auth != null && auth.uid == $uid && (!newData.exists() || root.child('rooms').child($roomId).child('members').child(auth.uid).exists())",
+          ".validate": "newData.hasChildren(['at'])",
+          "at": { ".validate": "newData.isNumber() && newData.val() <= now + 60000" },
+          "$other": { ".validate": false }
+        }
+      }
+    },
+
+    "lobbies": {
+      ".read": "auth != null",
+      ".indexOn": ["updatedAt"],
+      "$roomId": {
+        ".write": "auth != null && (root.child('rooms').child($roomId).child('hostUid').val() == auth.uid || (!newData.exists() && (!root.child('rooms').child($roomId).exists() || data.child('updatedAt').val() < now - 600000)))",
+        ".validate": "newData.hasChildren(['game', 'host', 'players', 'maxPlayers', 'updatedAt'])",
+        "game": { ".validate": "newData.isString() && newData.val().length <= 40" },
+        "host": { ".validate": "newData.isString() && newData.val().length <= 24" },
+        "players": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16" },
+        "maxPlayers": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 16" },
+        "updatedAt": { ".validate": "newData.isNumber()" },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
