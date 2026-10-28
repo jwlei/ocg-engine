@@ -50,6 +50,18 @@
             "place": { ".validate": "newData.isNumber()" }
           }
         },
+        "startedAt": { ".validate": "newData.isNumber()" },
+        "lastMove": {
+          ".validate": "newData.hasChildren(['seat', 'actionId', 'version'])",
+          "seat": { ".validate": "newData.isNumber()" },
+          "actionId": { ".validate": "newData.isString() && newData.val().length <= 200" },
+          "version": { ".validate": "newData.isNumber()" },
+          "cards": { "$index": { ".validate": "newData.isString() && newData.val().length <= 16" } },
+          "motion": {
+            "$axis": { ".validate": "($axis == 'x' || $axis == 'y' || $axis == 'power' || $axis == 'spin' || $axis == 'pitch' || $axis == 'yaw') && newData.isNumber() && newData.val() >= -20 && newData.val() <= 20" }
+          },
+          "$other": { ".validate": false }
+        },
         "$other": { ".validate": false }
       }
     },

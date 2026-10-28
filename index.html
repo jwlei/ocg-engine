@@ -7,7 +7,7 @@
     <title>OCG Engine</title>
     <meta name="description" content="Online card games in the browser." />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect x=%225%22 y=%223%22 width=%2222%22 height=%2226%22 rx=%224%22 fill=%22%23fffdf8%22 stroke=%22%231f6f4a%22 stroke-width=%222%22/%3E%3Ctext x=%2216%22 y=%2222%22 font-size=%2214%22 text-anchor=%22middle%22 fill=%22%23b3261e%22%3E%E2%99%A5%3C/text%3E%3C/svg%3E" />
-    <link rel="stylesheet" href="css/base.css?rev=1faa7042">
+    <link rel="stylesheet" href="css/base.css?rev=5bd56df2">
 </head>
 
 <body>
@@ -59,7 +59,7 @@
             <ol id="seats" class="seats"></ol>
             <div class="table" aria-label="Table">
                 <p id="tableLabel" class="muted"></p>
-                <div id="tableCards" class="cards"></div>
+                <div id="table" class="table-area"></div>
             </div>
             <p id="turnHint" role="status"></p>
             <div id="handSection">
@@ -84,9 +84,11 @@
     <script src="js/storage.js?rev=9ca6a52a"></script>
     <script src="js/cards.js?rev=2dc8e98f"></script>
     <script src="js/games.js?rev=62117194"></script>
-    <script src="games/climb.js?rev=56cbc9c4"></script>
-    <script src="js/room.js?rev=bf8766ae"></script>
-    <script src="js/app.js?rev=c2da25ed"></script>
+    <script src="games/climb.js?rev=37b8abfb"></script>
+    <script src="js/gestures.js?rev=a713d810"></script>
+    <script src="js/card-motion.js?rev=0cf6057d"></script>
+    <script src="js/room.js?rev=e7a4db0d"></script>
+    <script src="js/app.js?rev=12846d6c"></script>
     <script>OCG.app.start();</script>
 </body>
 

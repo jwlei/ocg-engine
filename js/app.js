@@ -60,7 +60,7 @@
         const card = OCG.cards.parse(cardId);
         const label = `${OCG.cards.rankLabel(card.rank)}${card.symbol}`;
         const props = { class: `card${card.red ? " card--red" : ""}${isSelected ? " is-selected" : ""}`,
-            "aria-label": OCG.cards.label(cardId) };
+            "data-card": cardId, "aria-label": OCG.cards.label(cardId) };
         if (!selectable) { return el("span", props, label); }
         return el("button", { ...props, type: "button", "aria-pressed": String(isSelected), onclick }, label);
     }
@@ -153,12 +153,116 @@
         $("lobbyHint").textContent = host ? "" : room.isMember ? "Waiting for the host to start." : "You are watching this lobby.";
     }
 
+    // Table and motion ---------------------------------------------------------------------------
+
+    const sameCards = (a, b) => a.length == b.length && a.every(card => b.includes(card));
+    let renderedGame = null;   // the game whose table is on screen, so a fresh view is not animated
+    let handoff = null;        // cards dragged or flicked out of the hand, waiting for the move to land
+
+    function gameKey() { return `${room.id}:${room.record.startedAt}`; }
+
+    // The cards a press on `cardId` would play: the selection if it is a legal play, otherwise the
+    // smallest legal play containing the card.
+    function cardsFor(cardId) {
+        if (!room || room.status != "playing") { return null; }
+        const plays = room.legalActions.filter(action => action.cards);
+        if (selected.has(cardId)) {
+            const match = plays.find(action => sameCards(action.cards, [...selected]));
+            if (match) { return match.cards; }
+        }
+        const options = plays.filter(action => action.cards.includes(cardId))
+            .sort((a, b) => a.cards.length - b.cards.length);
+        return options.length ? options[0].cards : null;
+    }
+
+    function playThrown(cards, motion, release) {
+        const action = room && room.legalActions.find(candidate => candidate.cards && sameCards(candidate.cards, cards));
+        if (!action) {
+            release.cancel();
+            return;
+        }
+        handoff = { cards, ...release };
+        selected.clear();
+        room.act(action, { motion }).catch(error => {
+            if (handoff) { handoff.cancel(); }
+            handoff = null;
+            toast(error.message || String(error));
+        });
+    }
+
+    // One play on the table: a small fan of cards at a stable spot and angle.
+    function buildPlay(group, key) {
+        const lastMove = room.record.lastMove;
+        const motion = lastMove && lastMove.cards && sameCards(lastMove.cards, group.cards) ? lastMove.motion : null;
+        const seed = `${room.record.startedAt}:${key}`;
+        const seatCount = Math.max(1, room.seats.length);
+        const seatBias = seatCount < 2 ? 0 : (group.seat / (seatCount - 1) - 0.5) * 24;
+        const layout = OCG.cardMotion.jitter(seed, 0, group.cards.length, motion, seatBias);
+        const play = el("div", { class: "play", "data-key": key },
+            group.cards.map((card, index) => {
+                const face = cardFace(card);
+                const offset = OCG.cardMotion.jitter(seed, index, group.cards.length, motion, seatBias);
+                face.style.setProperty("--rot", `${offset.angle}deg`);
+                face.style.setProperty("--dx", `${offset.x}px`);
+                face.style.setProperty("--dy", `${offset.y}px`);
+                return face;
+            }));
+        play.style.setProperty("--land-x", String(motion ? motion.x : layout.landX));
+        play.style.setProperty("--land-y", String(motion ? motion.y : layout.landY));
+        play._motion = motion;
+        return play;
+    }
+
+    // Updates the table in place: unchanged plays keep their elements, new plays fly in and a
+    // cleared trick is swept away. `handBefore` holds the hand's card positions before re-rendering.
+    function renderTable(view, handBefore) {
+        const area = $("table");
+        const groups = view.table || [];
+        const keys = groups.map(group => group.cards.join(","));
+        const animate = renderedGame === gameKey();
+        renderedGame = gameKey();
+        const existing = new Map(Array.from(area.querySelectorAll(".play"), play => [play.dataset.key, play]));
+        const cleared = [];
+        existing.forEach((play, key) => {
+            if (keys.includes(key)) { return; }
+            play.querySelectorAll("[data-card]").forEach(card =>
+                cleared.push({ element: card, rect: OCG.cardMotion.unrotatedRect(card) }));
+            play.remove();
+        });
+        const added = [];
+        groups.forEach((group, index) => {
+            let play = existing.get(keys[index]);
+            if (!play) {
+                play = buildPlay(group, keys[index]);
+                added.push({ group, play });
+            }
+            play.style.zIndex = String(index + 1);
+            area.appendChild(play);
+        });
+        if (!animate) { return; }
+        OCG.cardMotion.animateClear(cleared);
+        for (const { group, play } of added) {
+            const mine = handoff && sameCards(handoff.cards, group.cards) ? handoff : null;
+            const seat = $("seats").children[group.seat];
+            const seatRect = seat ? seat.getBoundingClientRect() : null;
+            const origin = card => (mine && mine.origins.get(card)) || handBefore.get(card) || seatRect;
+            OCG.cardMotion.animatePlay(Array.from(play.querySelectorAll("[data-card]")), origin, play._motion);
+            if (mine) {
+                mine.release();
+                handoff = null;
+            }
+        }
+    }
+
     function renderGame() {
         const definition = room.definition;
         const state = room.state;
         const view = room.view;
         const turn = definition.currentSeat(state);
         const results = new Map((room.record.results || []).map(result => [result.seat, result.place]));
+        const handBefore = OCG.cardMotion.cardRects($("hand"));
+        // A game seen for the first time with no move made yet was just dealt.
+        const dealing = renderedGame !== gameKey() && room.record.lastMove == null;
         $("gameTitle").textContent = definition.name;
         $("seats").replaceChildren(...room.seats.map((seat, index) => el("li", {
             class: `seat${index === turn ? " is-turn" : ""}${index === room.mySeat ? " is-me" : ""}`
@@ -169,25 +273,37 @@
                     : view.finished?.includes(index) ? `Out #${view.finished.indexOf(index) + 1}`
                         : view.cardCounts ? `${view.cardCounts[index]} cards` : ""))));
         $("tableLabel").textContent = view.tableLabel || "";
-        $("tableCards").replaceChildren(...(view.table || []).map(card => cardFace(card)));
+        renderTable(view, handBefore);
         $("gameLog").replaceChildren(...(view.log || []).slice(-8).map(line => el("li", {}, line)));
 
         const hand = view.hand || [];
         selected = new Set([...selected].filter(card => hand.includes(card)));
         const actions = room.legalActions;
         const myTurn = actions.length > 0;
-        $("hand").replaceChildren(...hand.map(card => cardFace(card, {
-            selectable: true, isSelected: selected.has(card),
-            onclick: () => {
-                if (selected.has(card)) { selected.delete(card); } else { selected.add(card); }
-                renderGame();
-            }
-        })));
+        // Cards being dragged stay hidden in the hand while their preview is in the air.
+        const inFlight = new Set(Array.from(document.querySelectorAll(".card-drag-layer [data-card]"), card => card.dataset.card));
+        $("hand").replaceChildren(...hand.map(card => {
+            const face = cardFace(card, {
+                selectable: true, isSelected: selected.has(card),
+                onclick: () => {
+                    if (selected.has(card)) { selected.delete(card); } else { selected.add(card); }
+                    renderGame();
+                }
+            });
+            if (inFlight.has(card)) { face.classList.add("is-drag-source"); }
+            return face;
+        }));
+        $("hand").classList.toggle("can-play", myTurn);
         $("handSection").hidden = room.mySeat == null;
-        const matching = actions.find(action => action.cards &&
-            action.cards.length == selected.size && action.cards.every(card => selected.has(card)));
+        if (dealing) {
+            OCG.cardMotion.animateDeal(Array.from($("hand").children), $("table").getBoundingClientRect());
+        }
+        const matching = actions.find(action => action.cards && sameCards(action.cards, [...selected]));
         const playButton = el("button", { type: "button", class: "primary", disabled: !matching,
-            onclick: attempt(async () => { await room.act(matching); selected.clear(); }) },
+            onclick: attempt(async () => {
+                await room.act(matching, { motion: OCG.gestures.botMotion() });
+                selected.clear();
+            }) },
         matching ? matching.label : "Select cards to play");
         $("actions").replaceChildren(
             actions.some(action => action.cards) ? playButton : null,
@@ -234,6 +350,7 @@
         }));
         $("joinRoomButton").addEventListener("click", attempt(() => room.join({ name: playerName(), playerKey: OCG.storage.playerKey() })));
         $("addBotButton").addEventListener("click", attempt(() => room.addBot()));
+        OCG.cardMotion.attachHand($("hand"), { table: $("table"), cardsFor, onPlay: playThrown });
         $("startButton").addEventListener("click", attempt(() => room.start()));
         $("playAgainButton").addEventListener("click", attempt(() => room.backToLobby()));
         for (const button of document.querySelectorAll("[data-leave]")) {

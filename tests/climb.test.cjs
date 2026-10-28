@@ -7,7 +7,7 @@ const players = count => Array.from({ length: count }, (_, seat) => ({ seat, nam
 
 function stateWith(overrides) {
     return { names: ["A", "B", "C"], hands: [["C5", "H5", "S9"], ["D6", "C7"], ["H3", "S13"]], turn: 0,
-        pile: null, passed: [], finished: [], log: [], ...overrides };
+        pile: null, trick: [], passed: [], finished: [], log: [], ...overrides };
 }
 
 test("setup deals the whole deck and the holder of the lowest card leads", () => {
@@ -36,10 +36,12 @@ test("when everyone else passes, the last player to play leads a new trick", () 
     let state = stateWith({});
     state = climb.applyAction(state, 0, { id: "play:S9", type: "play", cards: ["S9"] });
     assert.equal(state.turn, 1);
+    assert.deepEqual(climb.view(state, 1).table, [{ seat: 0, cards: ["S9"] }], "The table shows the trick's plays");
     state = climb.applyAction(state, 1, { id: "pass", type: "pass" });
     assert.equal(state.turn, 2);
     state = climb.applyAction(state, 2, { id: "pass", type: "pass" });
     assert.equal(state.pile, null);
+    assert.deepEqual(state.trick, [], "A cleared trick leaves the table");
     assert.equal(state.turn, 0);
 });
 

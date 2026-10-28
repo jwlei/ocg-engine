@@ -35,7 +35,7 @@ OCG.games.register({
     view(state, seat) {
         return {
             hand: [],            // card ids for this seat
-            table: [],           // card ids shown on the table
+            table: [],           // plays on the table, oldest first: [{ seat, cards: [card ids] }]
             tableLabel: "",      // caption above the table
             cardCounts: [],      // optional: cards left per seat
             finished: [],        // optional: seats that are out, in order
@@ -55,6 +55,7 @@ OCG.games.register({
 - **Use the `random` you are given** in `setup` and `chooseBotAction`, not `Math.random`, so tests can seed it.
 - **Validate through `legalActions`.** The engine only calls `applyAction` with an action whose `id` appears in `legalActions(state, seat)`, so `applyAction` can trust its input.
 - **Keep the log in the state** if you want a shared history (`state.log`, capped to the last ~20 entries).
+- **Keep table plays as groups.** Return each play as `{ seat, cards }` in `view().table`. New groups fly in from that seat (or the player's hand), and groups that disappear (a trick ends) are swept off the table, so return `[]` when the table clears.
 - **Cards** are string ids like `"H12"` (queen of hearts); `OCG.cards` has `standardDeck`, `shuffle`, `deal`, `sort`, `parse` and `label`. Games with other decks can use their own ids, but the generic UI renders `OCG.cards` ids.
 
 ## Wiring it up
@@ -77,8 +78,10 @@ const room = new OCG.Room(db, roomId).open(room => {
     room.view;          // your game's view(state, mySeat)
     room.legalActions;  // my legal moves right now
 });
-await room.act(action);
+await room.act(action, { motion });   // motion from a drag or flick, optional
 ```
+
+To keep the card motion in your own UI, reuse `js/card-motion.js`: give card elements `data-card="<id>"`, call `OCG.cardMotion.attachHand(handElement, { table, cardsFor, onPlay })`, and animate new table cards with `OCG.cardMotion.animatePlay(elements, origin, room.record.lastMove.motion)`. `js/app.js` shows the full wiring (`cardsFor`, `playThrown`, `renderTable`).
 
 Put game-specific rendering in a separate file (for example `js/my-game-ui.js`) and choose it in `app.js` by `room.definition.id`.
 

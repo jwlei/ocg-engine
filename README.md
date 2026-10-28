@@ -2,6 +2,8 @@
 
 Boilerplate for turn-based **online card games** that run in the browser: lobbies, invite links, public room lists, bots, presence, host handoff and synchronized play, backed by Firebase Realtime Database. No build step and no server code: static files plus Firebase.
 
+Cards move like cards: **drag** them onto the table or **flick** them upward (mouse or touch), and they fly, land and slide to rest. Every player sees the same throw, bots throw too, finished tricks are swept away and new hands are dealt in. All motion respects *reduce motion*.
+
 It ships with one example game, **Climb** (a small shedding game for 2–4 players), to show the game contract. Start a new game by copying `games/climb.js`.
 
 ## Quick start (local mode, no setup)
@@ -46,6 +48,8 @@ Before deploying changed JS or CSS, run `npm run stamp`. It adds a content hash 
 | `js/room.js` | Rooms: create/join, lobby, bots, seats, transactions, presence, host handoff, public listing. |
 | `js/games.js` | Game registry and bot move selection. |
 | `js/cards.js` | Standard 52-card deck helpers (IDs like `S14`), shuffle, deal, sort. |
+| `js/gestures.js` | Flick and drag recognition (tuning constants at the top) and throw motion; no DOM. |
+| `js/card-motion.js` | Drag previews, card flights and landings, trick clearing and dealing. |
 | `js/storage.js` | Safe localStorage access and the per-browser player key. |
 | `js/app.js` | Generic UI that renders any registered game. |
 | `games/` | Game definitions. `climb.js` is the example. |

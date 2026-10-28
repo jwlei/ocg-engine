@@ -4,7 +4,8 @@
 // Database layout (see database.rules.json):
 //   rooms/$roomId      { game, hostUid, status, isPublic, createdAt, updatedAt, version,
 //                        members/$uid { name, playerKey, joinedAt }, bots/$botId { name, addedAt },
-//                        seats [{ id, name, bot, left? }], state "<JSON>", results [{ seat, place }] }
+//                        seats [{ id, name, bot, left? }], state "<JSON>", results [{ seat, place }],
+//                        startedAt, lastMove { seat, actionId, cards?, motion?, version } }
 //   presence/$roomId/$uid { at }      removed automatically when the browser disconnects
 //   lobbies/$roomId    { game, host, players, maxPlayers, updatedAt }   public rooms waiting for players
 (function (OCG) {
@@ -34,17 +35,22 @@
     function seatCount(record) { return members(record).length + bots(record).length; }
 
     // Applies one legal action for `seat` to a room record; undefined aborts the transaction.
-    function applyToRecord(record, definition, seat, actionId, now) {
+    // `motion` is how the cards were thrown (see OCG.gestures.throwMotion); every client uses it
+    // to animate the same flight and landing.
+    function applyToRecord(record, definition, seat, actionId, now, motion = null) {
         const state = JSON.parse(record.state);
         if (definition.currentSeat(state) !== seat) { return undefined; }
         const action = definition.legalActions(state, seat).find(candidate => candidate.id === actionId);
         if (!action) { return undefined; }
         const next = definition.applyAction(state, seat, action);
         const over = definition.isOver(next);
+        const version = (record.version || 0) + 1;
         return {
             ...record, state: JSON.stringify(next), status: over ? "finished" : "playing",
             results: over ? definition.results(next) : null,
-            updatedAt: now, version: (record.version || 0) + 1
+            lastMove: { seat, actionId: action.id, cards: action.cards || null, version,
+                motion: action.cards ? OCG.gestures.normalizeMotion(motion) : null },
+            updatedAt: now, version
         };
     }
 
@@ -165,16 +171,19 @@
                 if (seats.length < definition.minPlayers) { return; }
                 const state = definition.setup(
                     seats.map((seat, index) => ({ seat: index, name: seat.name, bot: seat.bot })), this.random);
-                return { ...record, status: "playing", seats, state: JSON.stringify(state), results: null };
+                return { ...record, status: "playing", seats, state: JSON.stringify(state), results: null,
+                    lastMove: null, startedAt: this.db.now() };
             }, "The game could not be started.");
         }
 
-        async act(action) {
+        // Plays one of `legalActions`. Pass { motion } from a drag or flick so others see the same throw.
+        async act(action, { motion = null } = {}) {
             const actionId = typeof action == "string" ? action : action.id;
             await this.change(record => {
                 if (record.status != "playing") { return; }
                 const seat = (record.seats || []).findIndex(entry => entry.id === this.db.uid && !entry.bot);
-                return seat < 0 ? undefined : applyToRecord(record, OCG.games.get(record.game), seat, actionId, this.db.now());
+                return seat < 0 ? undefined
+                    : applyToRecord(record, OCG.games.get(record.game), seat, actionId, this.db.now(), motion);
             }, "That move is no longer possible.");
         }
 
@@ -215,7 +224,7 @@
         async backToLobby() {
             await this.change(record => {
                 if (record.hostUid !== this.db.uid || record.status != "finished") { return; }
-                return { ...record, status: "lobby", seats: null, state: null, results: null };
+                return { ...record, status: "lobby", seats: null, state: null, results: null, lastMove: null, startedAt: null };
             });
         }
 
@@ -334,7 +343,8 @@
                     const current = definition.currentSeat(state);
                     if (current == null || !record.seats[current]?.bot) { return; }
                     const action = OCG.games.chooseBotAction(definition, state, current, this.random);
-                    return action ? applyToRecord(record, definition, current, action.id, this.db.now()) : undefined;
+                    return action ? applyToRecord(record, definition, current, action.id, this.db.now(),
+                        OCG.gestures.botMotion(this.random)) : undefined;
                 }).catch(() => { });
             }, this.botDelayMs);
         }

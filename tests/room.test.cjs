@@ -83,13 +83,54 @@ test("a full game with humans and bots runs to the end and can be replayed", asy
     assert.equal(rooms[1].mySeat, 1);
     assert.equal(rooms[1].view.hand.length, 17, "Each player sees their own hand");
     await assert.rejects(rooms[1].act({ id: "not-a-move" }));
+    assert.equal(host.record.lastMove, undefined);
     await playOut(rooms);
+    const move = host.record.lastMove;
+    assert.ok(move && Number.isInteger(move.seat) && move.version == host.record.version);
+    assert.equal(typeof host.record.startedAt, "number");
     assert.equal(host.record.results.length, 3);
     await assert.rejects(rooms[1].backToLobby());
     await host.backToLobby();
     await until(() => rooms.every(room => room.status == "lobby"));
     assert.equal(host.state, null);
     assert.equal(host.members.length, 2);
+});
+
+test("moves record how cards were thrown so every client animates the same landing", async () => {
+    const { rooms, host } = await setup();
+    await host.addBot();
+    await until(() => host.bots.length == 1);
+    await host.start();
+    await until(() => host.status == "playing");
+    const thrown = { x: 0.25, y: -0.5, power: 0.75, spin: 4, pitch: 30, yaw: -6 };
+    const plays = { human: null, bot: null };
+    host.onChange = room => {
+        const move = room.record?.lastMove;
+        if (move && move.cards) { plays[room.seats[move.seat].bot ? "bot" : "human"] = move; }
+    };
+    // The human always plays cards when possible (passing otherwise); the host plays the bot.
+    await until(() => {
+        const actions = host.legalActions;
+        if (actions.length && !host.acting) {
+            const play = actions.find(action => action.cards);
+            host.acting = true;
+            host.act(play || actions[0], { motion: thrown }).finally(() => { host.acting = false; });
+        }
+        return (plays.human && plays.bot) || host.status == "finished";
+    }, 10000);
+    assert.deepEqual(plays.human.motion, { ...thrown, pitch: 18 }, "The thrower's motion is clamped and shared");
+    assert.ok(plays.bot, "The bot played cards");
+    assert.deepEqual(OCG.gestures.normalizeMotion(plays.bot.motion), plays.bot.motion, "Bots throw too");
+    rooms.forEach(room => room.close());
+});
+
+test("passing records the move without a throw", async () => {
+    const definition = OCG.games.get("climb");
+    const state = { names: ["A", "B"], hands: [["C5"], ["D6"]], turn: 0, trick: [{ seat: 1, cards: ["S4"] }],
+        pile: { seat: 1, rank: 4, count: 1, cards: ["S4"] }, passed: [], finished: [], log: [] };
+    const record = { status: "playing", state: JSON.stringify(state), version: 4 };
+    const next = OCG.rooms.applyToRecord(record, definition, 0, "pass", 1, { x: 0, y: 0, power: 1, spin: 0, pitch: 0, yaw: 0 });
+    assert.deepEqual(next.lastMove, { seat: 0, actionId: "pass", cards: null, version: 5, motion: null });
 });
 
 test("late joiners spectate without a hand", async () => {

@@ -1,7 +1,7 @@
 // Loads the browser scripts into Node in index.html order; they register on globalThis.OCG.
 const path = require("node:path");
 
-for (const file of ["js/db.js", "js/storage.js", "js/cards.js", "js/games.js", "games/climb.js", "js/room.js"]) {
+for (const file of ["js/db.js", "js/storage.js", "js/cards.js", "js/games.js", "games/climb.js", "js/gestures.js", "js/card-motion.js", "js/room.js"]) {
     require(path.join(__dirname, "..", file));
 }
 

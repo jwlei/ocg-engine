@@ -46,7 +46,7 @@
             const turn = hands.findIndex(hand => hand.includes(lowest));
             return {
                 names: players.map(player => player.name),
-                hands, turn, pile: null, passed: [], finished: [],
+                hands, turn, pile: null, trick: [], passed: [], finished: [],
                 log: [`${players[turn].name} holds ${cards.label(lowest)} and leads.`]
             };
         },
@@ -90,6 +90,7 @@
                     const leader = state.finished.includes(state.pile.seat)
                         ? nextActiveSeat(state, state.pile.seat) : state.pile.seat;
                     state.pile = null;
+                    state.trick = [];
                     state.passed = [];
                     state.turn = leader;
                     addLog(state, `${state.names[leader]} leads.`);
@@ -102,6 +103,7 @@
             state.hands[seat] = hand.filter(card => !action.cards.includes(card));
             state.pile = { seat, rank: cards.parse(action.cards[0]).rank, count: action.cards.length,
                 cards: action.cards };
+            state.trick.push({ seat, cards: action.cards });
             state.passed = [];
             addLog(state, `${name} plays ${describe(action.cards)}.`);
             if (state.hands[seat].length == 0) {
@@ -124,11 +126,11 @@
             return state.finished.map((seat, index) => ({ seat, place: index + 1 }));
         },
 
-        // What a seat may see. Spectators (seat null) see no hand.
+        // What a seat may see. Spectators (seat null) see no hand. The table shows this trick's plays.
         view(state, seat) {
             return {
                 hand: seat == null ? [] : state.hands[seat],
-                table: state.pile ? state.pile.cards : [],
+                table: state.trick,
                 tableLabel: state.pile ? `${state.names[state.pile.seat]} played` : "New trick",
                 cardCounts: state.hands.map(hand => hand.length),
                 finished: state.finished,

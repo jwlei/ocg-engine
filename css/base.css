@@ -164,17 +164,80 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px s
 .seat.is-me .seat__name { font-weight: 600; }
 
 .table {
-    min-height: 150px;
-    padding: 12px;
+    padding: 10px 12px 12px;
     border-radius: 16px;
     background: var(--felt);
     color: #f1f5f2;
 }
 
-.table .muted { color: #cfe0d6; margin: 0 0 8px; }
+.table .muted { color: #cfe0d6; margin: 0 0 4px; }
+
+/* Plays land around the centre; --land-x/--land-y (-1..1) spread them over the free space. */
+.table-area {
+    position: relative;
+    height: clamp(170px, 30vh, 260px);
+    container-type: size;
+}
+
+.play {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    display: flex;
+    transform: translate(-50%, -50%)
+        translate(calc(var(--land-x, 0) * max(0px, 50cqw - 100px)), calc(var(--land-y, 0) * max(0px, 50cqh - 50px)));
+}
+
+.play > .card { transform: translate(var(--dx, 0px), var(--dy, 0px)) rotate(var(--rot, 0deg)); }
+.play > .card + .card { margin-left: -24px; }
 
 .cards { display: flex; flex-wrap: wrap; gap: 6px; }
-.hand { margin-top: 8px; }
+
+/* The hand scrolls sideways natively; vertical strokes pick cards up. */
+.hand {
+    flex-wrap: nowrap;
+    gap: 0;
+    margin-top: 8px;
+    padding: 14px 4px 6px;
+    overflow-x: auto;
+    touch-action: pan-x;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.hand > .card { flex: none; touch-action: pan-x; }
+.hand > .card + .card { margin-left: -12px; }
+.hand.can-play > .card { cursor: grab; }
+
+/* Motion: drag previews, flights and landings (js/card-motion.js). */
+.card.is-drag-source,
+.card.is-landing { visibility: hidden; }
+
+.card-drag-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.card-drag-layer > .card {
+    position: absolute;
+    margin: 0;
+    box-shadow: 0 12px 24px rgb(0 0 0 / 0.3);
+    transform: perspective(900px) translate3d(var(--drag-x, 0px), var(--drag-y, 0px), 0)
+        rotateX(var(--tilt-x, 0deg)) rotateY(var(--tilt-y, 0deg)) scale(var(--drag-scale, 1));
+}
+
+.card-drag-layer > .card.is-returning { transition: transform 320ms cubic-bezier(.2, .8, .25, 1); }
+
+.card-flight {
+    position: fixed;
+    z-index: 900;
+    margin: 0;
+    pointer-events: none;
+    transform-origin: 50% 50%;
+    filter: drop-shadow(0 6px 10px rgb(0 0 0 / 0.3));
+}
 
 .card {
     display: inline-grid;
